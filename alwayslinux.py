@@ -129,17 +129,46 @@ def parse_apt_policy(text):
     return result
 
 
+def parse_pacman_info(info, installed):
+    """{paquet: (version, installé ?)} depuis `pacman -Si` (dépôts) et `pacman -Q` (installés)."""
+    result, name = {}, None
+    installed = {l.split()[0] for l in installed.splitlines() if l.strip()}
+    for line in info.splitlines():
+        key, _, value = line.partition(":")  # coupe au premier « : », l'époque (1:2.0) reste dans la version
+        if key.strip() == "Name":
+            name = value.strip()
+        elif key.strip() == "Version" and name:
+            result[name] = (value.strip(), name in installed)
+    return result
+
+
+# Gestionnaire de paquets lu en local → fonction {paquet: (version, installé ?)}
+BACKENDS = {
+    "apt-cache": lambda pkgs: parse_apt_policy(run("apt-cache", "policy", *pkgs)),
+    "pacman": lambda pkgs: parse_pacman_info(run("pacman", "-Si", *pkgs), run("pacman", "-Q", *pkgs)),
+}
+BACKEND = next((name for name in BACKENDS if shutil.which(name)), None)
+
+
+def has_catalog():
+    """Vrai si un catalogue AppStream des dépôts est installé (Debian, Fedora, Arch, openSUSE…)."""
+    # Seulement les dossiers de données : /var/cache/swcatalog/cache existe même sans catalogue
+    return any(glob.glob(f"{root}/{d}/{fmt}/*") for root in ("/usr/share", "/var/lib", "/var/cache")
+               for d in ("swcatalog", "app-info") for fmt in ("xml", "yaml", "xmls", "yamls"))
+
+
 def local_icon(icon, flatpak):
     """("file", chemin) ou ("name", icône du thème) pour une icône AppStream, None sinon."""
     if not icon:
         return None
-    if not icon.endswith(".png"):
+    # Un nom sans extension d'image est une icône du thème (« org.gnome.Nautilus » contient des points)
+    if os.path.splitext(icon)[1].lower() not in (".png", ".jxl", ".svg", ".jpg"):
         return ("name", icon)
     if flatpak:
         dirs = [f"{root}/appstream/*/{ARCH}/active/icons/128x128"
                 for root in ("/var/lib/flatpak", os.path.expanduser("~/.local/share/flatpak"))]
-    else:  # Debian 12+ : swcatalog ; Ubuntu plus ancien : app-info
-        dirs = ["/var/lib/swcatalog/icons/*/64x64", "/var/lib/app-info/icons/*/64x64"]
+    else:  # Debian 12+ : /var/lib/swcatalog ; Arch, Fedora : /usr/share/swcatalog ; Ubuntu ancien : app-info
+        dirs = [f"{root}/{d}/icons/*/64x64" for root in ("/var/lib", "/usr/share") for d in ("swcatalog", "app-info")]
     for d in dirs:
         found = glob.glob(os.path.join(d, icon))
         if found:
@@ -166,15 +195,15 @@ def split_components(comps):
 
 
 def local_lookup(query):
-    """Recherche entièrement locale (distribution apt + flatpak)."""
+    """Recherche locale : dépôts via apt ou pacman, applis et logos via AppStream s'il est là."""
     debs, flats = split_components(parse_appstream(run("appstreamcli", "search", query)))
     # Les outils en ligne de commande (htop, git…) n'ont souvent pas de fiche AppStream
     if query not in {d["pkg"] for d in debs}:
         debs.insert(0, {"name": query, "summary": "", "pkg": query, "icon": ("name", query)})  # logo du thème si installé
-    status = parse_apt_policy(run("apt-cache", "policy", *[d["pkg"] for d in debs]))
+    status = BACKENDS[BACKEND]([d["pkg"] for d in debs])
     debs = [{**d, "version": status[d["pkg"]][0], "installed": status[d["pkg"]][1]}
             for d in debs if d["pkg"] in status][:5]
-    return {"debs": debs, "flatpaks": with_flatpak_status(flats[:3])}
+    return {"debs": debs, "flatpaks": with_flatpak_status(flats[:3]) or flathub_api(query)}
 
 
 def with_flatpak_status(flats):
@@ -234,7 +263,14 @@ def repology(query):
 def flatpak_lookup(query):
     """Applis Flatpak : catalogue local si flatpak est installé, sinon l'API Flathub."""
     if shutil.which("flatpak") and shutil.which("appstreamcli"):
-        return with_flatpak_status(split_components(parse_appstream(run("appstreamcli", "search", query)))[1][:3])
+        # Catalogue Flathub local vide tant qu'aucun `flatpak update` n'a tourné : on passe alors par l'API
+        local = with_flatpak_status(split_components(parse_appstream(run("appstreamcli", "search", query)))[1][:3])
+        if local:
+            return local
+    return flathub_api(query)
+
+
+def flathub_api(query):
     try:
         hits = cached("flathub-" + urllib.parse.quote(query, safe="") + ".json", 86400,
                       lambda: fetch(FLATHUB, {"query": query})["hits"][:3])
@@ -288,6 +324,10 @@ def self_check():
                               "gimp:\n  Installed: (none)\n  Candidate: 2.10.34-1\n"
                               "nope:\n  Installed: (none)\n  Candidate: (none)\n")
     assert policy == {"htop": ("3.2.2-2", True), "gimp": ("2.10.34-1", False)}
+
+    info = ("Repository      : extra\nName            : discord\nVersion         : 1:0.0.110-1\n\n"
+            "Repository      : extra\nName            : vlc\nVersion         : 3.0.21-15\n")
+    assert parse_pacman_info(info, "vlc 3.0.21-15\n") == {"discord": ("1:0.0.110-1", False), "vlc": ("3.0.21-15", True)}
     print("self-check ok")
 
 
@@ -302,8 +342,6 @@ def main():
             home = detect(f.read())
     except OSError:
         home = 0
-    # Lecture locale seulement pour la distribution de la machine, et si elle utilise apt
-    has_apt = bool(shutil.which("apt-cache"))
 
     class Window(Adw.ApplicationWindow):
         def __init__(self, app):
@@ -338,16 +376,35 @@ def main():
                                                          "Tape son nom puis Entrée pour obtenir la commande d'installation."))
 
         def appstream_tip(self):
-            """Propose d'installer AppStream s'il manque (vérifié à chaque fois : pas besoin de relancer)."""
-            if shutil.which("appstreamcli"):
+            """Propose d'installer AppStream ou son catalogue s'il manque (vérifié à chaque fois : pas besoin de relancer)."""
+            # Sur Arch, flatpak installe appstreamcli mais pas le catalogue des dépôts : il faut vérifier les deux
+            if shutil.which("appstreamcli") and has_catalog():
                 return []
-            return [self.boxed(self.cmd_row(("name", "dialog-information-symbolic"), "Active la recherche locale",
-                                            "AppStream n'est pas installé : installe-le pour des résultats "
-                                            "plus rapides, hors ligne et avec les logos.",
+            missing = "Le catalogue AppStream n'est" if shutil.which("appstreamcli") else "AppStream n'est"
+            return [self.boxed(self.cmd_row(("name", "dialog-information-symbolic"), "Ajoute les logos et descriptions",
+                                            f"{missing} pas installé : installe-le pour voir les applis "
+                                            "avec leur logo et leur description.",
                                             APPSTREAM[DISTROS[home][1]], False))]
 
+        def flathub_tip(self, template):
+            """Propose d'installer flatpak ou d'ajouter Flathub s'il manque, sans quoi `flatpak install flathub` échoue."""
+            # Ne concerne que cette machine : inutile quand on regarde une autre distribution
+            if self.distro.get_selected() != home:
+                return []
+            add = "flatpak remote-add --if-not-exists flathub https://dl.flathub.org/repo/flathub.flatpakrepo"
+            if not shutil.which("flatpak"):
+                missing, cmd = "Flatpak n'est pas installé", f"{template.format('flatpak')} && {add}"
+            elif "flathub" not in run("flatpak", "remotes", "--columns=name").split():
+                missing, cmd = "Le dépôt Flathub n'est pas configuré", add
+            else:
+                return []
+            return [self.boxed(self.cmd_row(("name", "dialog-information-symbolic"), "Active Flathub",
+                                            f"{missing} : les commandes ci-dessous ne marcheront pas sans lui.",
+                                            cmd, False))]
+
         def key(self):
-            local = has_apt and shutil.which("appstreamcli") and self.distro.get_selected() == home
+            # Lecture locale seulement pour la distribution de la machine, si son gestionnaire de paquets est connu
+            local = BACKEND and self.distro.get_selected() == home
             return (self.current, "local" if local else "remote")
 
         def search(self, text):
@@ -407,6 +464,7 @@ def main():
                 widgets += self.remote_widgets(result, label, repo, template)
 
             widgets.append(self.label("Via Flatpak (Flathub)", ["heading"]))
+            widgets += self.flathub_tip(template)
             rows = [self.cmd_row(f["icon"], f["name"], f["summary"], f"flatpak install flathub {f['app_id']}",
                                  f["installed"]) for f in result["flatpaks"]]
             widgets.append(self.boxed(*rows) if rows else self.label("Rien trouvé sur Flathub.", ["dim-label"]))
@@ -458,7 +516,10 @@ def main():
             elif kind == "name" and os.path.exists(f"/usr/share/pixmaps/{value}.png"):  # applis installées hors thème (.deb)
                 image.set_from_file(f"/usr/share/pixmaps/{value}.png")
             elif kind == "file":
-                image.set_from_file(value)
+                try:
+                    image.set_from_paintable(Gdk.Texture.new_from_filename(value))
+                except GLib.Error:  # format non lisible ici (ex : jxl sans décodeur) : icône générique
+                    pass
             elif kind == "url":
                 def work():
                     try:

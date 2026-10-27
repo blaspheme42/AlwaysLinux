@@ -17,10 +17,10 @@ with logos, versions and an "Installed" badge for what you already have.
 
 - **Detects your distro** automatically (Debian, Ubuntu, Mint, Fedora, Arch, Manjaro, openSUSE, Alpine, Void),
   and lets you look up the command for any other distro in the list.
-- **Instant and offline on Debian/Ubuntu/Mint**: reads the local AppStream catalog and `apt-cache`
-  — no network needed, results in about 0.25 s.
+- **Instant and offline on Debian/Ubuntu/Mint and Arch/Manjaro**: reads the local AppStream catalog and
+  `apt-cache` or `pacman` — no network needed, results in about 0.25 s.
 - **Flatpak results** from the local Flathub catalog (or the Flathub API if Flatpak isn't installed).
-- **"Installed" badge** for `.deb` packages and Flatpaks already on your machine.
+- **"Installed" badge** for distro packages and Flatpaks already on your machine.
 - **Opens a terminal with the command pre-filled**, but never runs it: you review it, press Enter to run,
   or Ctrl+C to cancel. The command is also copied to the clipboard.
 - **Suggestions** when no package matches the exact name.
@@ -62,10 +62,10 @@ python3 alwayslinux.py
 | Source | Used for |
 |---|---|
 | `appstreamcli` (local) | App names, descriptions and logos — distro packages and Flatpaks |
-| `apt-cache policy` (local) | Available version and installed status on apt-based distros |
+| `apt-cache policy` / `pacman -Si -Q` (local) | Available version and installed status on apt- and pacman-based distros |
 | `flatpak list` (local) | Installed Flatpaks |
 | [Repology API](https://repology.org/api) | Package names for distros other than yours |
-| [Flathub API](https://flathub.org) | Flatpak results when Flatpak isn't installed |
+| [Flathub API](https://flathub.org) | Flatpak results when Flatpak or its local catalog isn't available |
 
 The whole app is a single Python file using GTK 4 and libadwaita. Run the built-in self-test with
 `python3 alwayslinux.py --test`.
@@ -81,9 +81,9 @@ Both scripts run the self-test first and stop if it fails.
 
 ## Limitations
 
-- Fully local mode only works on apt-based distros for now; other distros use Repology for repository results.
+- Fully local mode only works on apt- and pacman-based distros for now; other distros use Repology for repository results.
 - Package names are matched automatically and can occasionally be wrong (e.g. openSUSE names Firefox `MozillaFirefox`).
-- Local results are only as fresh as your last `apt update` / `flatpak update --appstream`.
+- Local results are only as fresh as your last `apt update` / `pacman -Sy` / `flatpak update --appstream`.
 
 ## License
 
