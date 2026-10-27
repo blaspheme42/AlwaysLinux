@@ -1,6 +1,6 @@
 # Maintainer: Benjamin Marco <154837737+blaspheme42@users.noreply.github.com>
 pkgname=alwayslinux
-pkgver=0.1.0
+pkgver=0.2.0
 pkgrel=1
 pkgdesc="Trouve la commande pour installer une appli sur ta distribution (paquets et Flatpak, avec les logos)"
 arch=('any')

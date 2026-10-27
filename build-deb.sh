@@ -2,7 +2,7 @@
 # Construit alwayslinux_<version>_all.deb dans ce dossier.
 set -eu
 cd "$(dirname "$0")"
-VERSION=0.1.0
+VERSION=0.2.0
 ID=fr.blaspheme.AlwaysLinux
 ROOT=$(mktemp -d)
 trap 'rm -rf "$ROOT"' EXIT

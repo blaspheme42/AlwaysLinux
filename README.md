@@ -35,15 +35,15 @@ Download the package for your distro from the
 **Debian / Ubuntu / Mint**
 
 ```bash
-wget https://github.com/blaspheme42/AlwaysLinux/releases/latest/download/alwayslinux_0.1.0_all.deb
-sudo apt install ./alwayslinux_0.1.0_all.deb
+wget https://github.com/blaspheme42/AlwaysLinux/releases/latest/download/alwayslinux_0.2.0_all.deb
+sudo apt install ./alwayslinux_0.2.0_all.deb
 ```
 
 **Arch / Manjaro**
 
 ```bash
-wget https://github.com/blaspheme42/AlwaysLinux/releases/latest/download/alwayslinux-0.1.0-1-any.pkg.tar.zst
-sudo pacman -U alwayslinux-0.1.0-1-any.pkg.tar.zst
+wget https://github.com/blaspheme42/AlwaysLinux/releases/latest/download/alwayslinux-0.2.0-1-any.pkg.tar.zst
+sudo pacman -U alwayslinux-0.2.0-1-any.pkg.tar.zst
 ```
 
 Then launch **AlwaysLinux** from your app menu, or run `alwayslinux`.

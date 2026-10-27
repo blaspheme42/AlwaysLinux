@@ -18,7 +18,7 @@ import urllib.request
 
 API = "https://repology.org/api/v1"
 FLATHUB = "https://flathub.org/api/v2/search"
-UA = "alwayslinux/0.1 (projet perso)"  # Repology demande un User-Agent identifiable
+UA = "alwayslinux/0.2 (projet perso)"  # Repology demande un User-Agent identifiable
 CACHE = os.path.join(os.environ.get("XDG_CACHE_HOME") or os.path.expanduser("~/.cache"), "alwayslinux")
 ARCH = os.uname().machine
 
