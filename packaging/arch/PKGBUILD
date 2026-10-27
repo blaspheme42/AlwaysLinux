@@ -1,0 +1,28 @@
+# Maintainer: Benjamin Marco <154837737+blaspheme42@users.noreply.github.com>
+pkgname=alwayslinux
+pkgver=0.1.0
+pkgrel=1
+pkgdesc="Trouve la commande pour installer une appli sur ta distribution (paquets et Flatpak, avec les logos)"
+arch=('any')
+url="https://github.com/blaspheme42/AlwaysLinux"
+license=('MIT')
+depends=('python' 'python-gobject' 'gtk4' 'libadwaita')
+optdepends=('appstream: recherche locale des applis et des logos'
+            'archlinux-appstream-data: catalogue AppStream des dépôts Arch'
+            'flatpak: résultats Flatpak lus en local')
+source=('alwayslinux.py'
+        'fr.blaspheme.AlwaysLinux.desktop'
+        'fr.blaspheme.AlwaysLinux.svg'
+        'LICENSE')
+sha256sums=('SKIP' 'SKIP' 'SKIP' 'SKIP')  # shortcut: fichiers locaux, à générer avec `makepkg -g` pour l'AUR
+
+check() {
+  python alwayslinux.py --test
+}
+
+package() {
+  install -Dm755 alwayslinux.py "$pkgdir/usr/bin/alwayslinux"
+  install -Dm644 fr.blaspheme.AlwaysLinux.desktop "$pkgdir/usr/share/applications/fr.blaspheme.AlwaysLinux.desktop"
+  install -Dm644 fr.blaspheme.AlwaysLinux.svg "$pkgdir/usr/share/icons/hicolor/scalable/apps/fr.blaspheme.AlwaysLinux.svg"
+  install -Dm644 LICENSE "$pkgdir/usr/share/licenses/$pkgname/LICENSE"
+}

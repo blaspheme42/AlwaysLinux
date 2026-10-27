@@ -1,0 +1,10 @@
+[Desktop Entry]
+Type=Application
+Name=AlwaysLinux
+Comment=Trouve la commande pour installer une appli sur ta distribution
+Exec=alwayslinux
+Icon=fr.blaspheme.AlwaysLinux
+Terminal=false
+Categories=System;PackageManager;
+Keywords=paquet;installer;apt;flatpak;logiciel;package;install;
+StartupNotify=true

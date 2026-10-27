@@ -1,0 +1,4 @@
+# Built packages are published as release assets, not committed
+*.deb
+*.pkg.tar.zst
+__pycache__/
